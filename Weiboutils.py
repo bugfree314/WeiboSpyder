@@ -222,6 +222,8 @@ def search_Weibo_tags(keyword: str, searchtype: str = 'weibo', num=10, **search_
         soup = search_Weibo_raw(keyword, searchtype, page, **search_param)
         if searchtype in ('topic', 'user'):
             tags += soup.findAll('div', class_='card')
+            if searchtype == 'topic':
+                return tags
         else:
             tags += soup.findAll('div', class_='card-wrap', mid=True)
         page += 1
@@ -353,8 +355,8 @@ def get_comment(uid: 'int|str', mid: 'int|str') -> dict:
 
 
 def get_uid_from_url(url: str) -> str:
-    if re.search(r'\d\?ref',url):
-        return re.search(r'/(\d+)\?',url).group(1)
+    if re.search(r'\d\?ref', url):
+        return re.search(r'/(\d+)\?', url).group(1)
     if re.search(r'/u/', url):
         uid = re.search(r'/(\d+)', url).group(1)
     else:
