@@ -179,6 +179,21 @@ class Weibo:
         else:
             return Comment(self.raw['user']['id'], self.raw['mid'])
 
+    @property
+    def statistic(self):
+        if 'visible' in self.raw.keys():
+            return {
+                'forward': self.raw['reposts_count'],
+                'comment': self.raw['comments_count'],
+                'like': self.raw['attitudes_count']
+            }
+        else:
+            return {
+                'forward': self.raw['act']['forward'],
+                'comment': self.raw['act']['comment']['num'],
+                'like': self.raw['act']['like']
+            }
+
 
 class WeiboSpyder:
     """
