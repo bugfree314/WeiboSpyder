@@ -1,3 +1,4 @@
+import json
 import Weiboutils as WBapi
 
 
@@ -54,12 +55,12 @@ class User:
     @property
     def fans(self):
         return WBapi.get_user_follow(
-            self.uid, 1, self.info['data']['user']['followers_count'])
+            self.uid, 1, self.info['followers_count'])
 
     @property
     def follows(self):
         return WBapi.get_user_follow(
-            self.uid, 0, self.info['data']['user']['friends_count'])
+            self.uid, 0, self.info['friends_count'])
 
     def _get_user_info_(self, uid):
         return WBapi.get_user_info(uid)
@@ -103,11 +104,9 @@ class Weibo:
                 params = {
                     "id": mblogid
                 }
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-                    "Cookie": WBapi.get_cookies_from_file()
-                }
-                r = WBapi.requests.get(url, headers=headers, params=params)
+
+                r = WBapi.requests.get(
+                    url, headers=WBapi.get_headers(), params=params)
                 assert r.status_code == 200
                 txt['raw'] = WBapi.json.loads(
                     r.content)['data']['longTextContent']
@@ -136,14 +135,21 @@ class Weibo:
                 params = {
                     "data": "{\"Component_Play_Playinfo\":{\"oid\":\""+video_id+"\"}}",
                 }
-                headers = {
-                    "Referer": "https://weibo.com/tv/show/"+video_id+"?from=old_pc_videoshow",
-                    "Cookie": WBapi.get_cookies_from_file()
+                headers_dict = {
+                    "Referer": "https://weibo.com/tv/show/"+video_id+"?from=old_pc_videoshow"
                 }
-                r = WBapi.requests.post(url, params=params, headers=headers)
+                headers_dict.update(WBapi.get_headers())
+                r = WBapi.requests.post(
+                    url, params=params, headers=headers_dict)
                 assert r.status_code == 200
-                media_dict['video'] = WBapi.json.loads(
-                    r.content)['data']['Component_Play_Playinfo']['urls']
+                content_dict = WBapi.json.loads(r.content)
+
+                def has_url(d):
+                    return ('data' in d) and (isinstance(d['data'], dict)) and ('Component_Play_Playinfo' in d['data']) and (isinstance(d['data']['Component_Play_Playinfo'], dict)) and ('urls' in d['data']['Component_Play_Playinfo'])
+
+                if has_url(content_dict):
+                    media_dict['video'] = content_dict['data']['Component_Play_Playinfo']['urls']
+
             return media_dict
 
     @property
@@ -162,11 +168,9 @@ class Weibo:
             params = {
                 "id": fid
             }
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-                "Cookie": WBapi.get_cookies_from_file()
-            }
-            r = WBapi.requests.get(url, params=params, headers=headers)
+
+            r = WBapi.requests.get(
+                url, params=params, headers=WBapi.get_headers())
             assert r.status_code == 200
             return Weibo(WBapi.json.loads(r.content))
         else:
@@ -209,6 +213,7 @@ class WeiboSpyder:
 
     def __init__(self, cookies: str) -> None:
         WBapi.set_cookies(cookies)
+        WBapi.set_headers()
 
     @property
     def allGroups(self):
@@ -267,6 +272,7 @@ class WeiboSpyder:
 
         搜索参数：
             video:(optional) xsort=hot(热门),typeall=1(全部),hasvideo=0|1
+            weibo:(optional) nodup=1 //不加该参数结果为聚合重复微博
 
         return:list of searchtype
         """

@@ -15,10 +15,24 @@ def set_cookies(cookies: str):
         fp.write(cookies)
 
 
-def get_cookies_from_file():
+def _get_cookies_from_file():
     with open(cookies_path, 'r') as fp:
         cfg = fp.read()
     return cfg
+
+
+_headers = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
+    "Cookie": ''
+}
+
+
+def set_headers():
+    _headers.update({'Cookie': _get_cookies_from_file()})
+
+
+def get_headers():
+    return _headers
 
 
 def get_hotband():
@@ -81,10 +95,8 @@ def get_allGroups():
         key:value --> title:{'gid','containerid'}
     """
     url = 'https://weibo.com/ajax/feed/allGroups'
-    headers = {
-        "Cookie": get_cookies_from_file()
-    }
-    r = requests.get(url, headers=headers)
+
+    r = requests.get(url, headers=_headers)
     assert r.status_code == 200
     group_raw = json.loads(r.content)['groups'][3:]
     group_category_raw = group_raw[0]['group']
@@ -122,18 +134,16 @@ def get_hotWeibos(title: str = '24小时榜', num=100):
         "extparam": "discover|new_feed",
         'max_id': page
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-        "Cookie": get_cookies_from_file(),
-    }
+
     hotWeibos_raw = []
     if num > 400:
         num = 400
     while len(hotWeibos_raw) < num:
-        r = requests.get(url, headers=headers, params=params)
+        r = requests.get(url, headers=_headers, params=params)
         assert r.status_code == 200
         hotWeibos_raw += json.loads(r.content)['statuses']
         page += 1
+        params['max_id'] = page
     hotWeibos = hotWeibos_raw[:num]
 
     # dict_keys = ('created_at', 'id', 'mblogid', 'text_raw', 'text',
@@ -162,6 +172,7 @@ def search_Weibo_raw(keyword: str, searchtype: str = 'weibo', page=1, **search_p
 
     搜索参数：
         video:(optional) xsort=hot(热门),typeall=1(全部),hasvideo=0|1
+        weibo:(optional) nodup=1 //不加该参数结果为聚合重复微博
 
     return:
         html soup
@@ -171,10 +182,7 @@ def search_Weibo_raw(keyword: str, searchtype: str = 'weibo', page=1, **search_p
     assert searchtype in types
 
     url = 'https://s.weibo.com/'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0',
-        'Cookie': get_cookies_from_file()
-    }
+
     params_dict = {
         "q": keyword,
         'page': page
@@ -183,7 +191,8 @@ def search_Weibo_raw(keyword: str, searchtype: str = 'weibo', page=1, **search_p
         params_dict.update({"rd": "realtime"})
     if search_param:
         params_dict.update(search_param)
-    r = requests.get(url=url+searchtype, headers=headers, params=params_dict)
+
+    r = requests.get(url=url+searchtype, headers=_headers, params=params_dict)
     assert r.status_code == 200
 
     soup = BeautifulSoup(r.text, 'lxml')
@@ -200,21 +209,22 @@ def search_Weibo_tags(keyword: str, searchtype: str = 'weibo', num=10, **search_
 
     搜索参数：
         video:(optional) xsort=hot(热门),typeall=1(全部),hasvideo=0|1
+        weibo:(optional) nodup=1 //不加该参数结果为聚合重复微博
 
     return:
         list of required html tags
     """
-    soup = search_Weibo_raw(keyword, searchtype, **search_param)
-    m = re.search(r'\d+', str(soup.find('div', class_='m-error')))
-    if m:
-        total_num = int(m.group())
-    else:
-        total_num = 1000000
-    logger = Logger('search_Weibo')
-    if num > total_num:
-        logger.warning(
-            'Search number is too large,reset to MAX= %d' % total_num)
-        num = total_num
+    if searchtype == 'weibo' and ('nodup' not in search_param):
+        soup = search_Weibo_raw(keyword, searchtype, **search_param)
+        if soup.find(class_='m-error') and re.search(r'\d+', soup.find(class_='m-error').text):
+            MaxNum = int(
+                re.search(r'\d+', soup.find(class_='m-error').text).group(0))
+            if num > MaxNum:
+                logger = Logger('search_Weibo_tags')
+                logger.warning(
+                    'Search number is too large,reset to MAX= %d' % MaxNum)
+                num = MaxNum
+
     tags = []
     page = 1
 
@@ -345,11 +355,8 @@ def get_comment(uid: 'int|str', mid: 'int|str') -> dict:
         "count": "100",
         "uid": uid
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-        "Cookie": get_cookies_from_file()
-    }
-    r = requests.get(url, params=params, headers=headers)
+
+    r = requests.get(url, params=params, headers=_headers)
     assert r.status_code == 200
     return json.loads(r.content)['data']
 
@@ -361,10 +368,7 @@ def get_uid_from_url(url: str) -> str:
         uid = re.search(r'/(\d+)', url).group(1)
     else:
         req_url = "https://weibo.com/ajax/profile/info"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-            "Cookie": get_cookies_from_file()
-        }
+
         if re.search(r'/n/', url):
             params = {
                 "screen_name": re.search(r'([^/]*)\Z', url).group(1)
@@ -373,7 +377,7 @@ def get_uid_from_url(url: str) -> str:
             params = {
                 "custom": re.search(r'([^/]*)\Z', url).group(1)
             }
-        r = requests.get(req_url, headers=headers, params=params)
+        r = requests.get(req_url, headers=_headers, params=params)
         assert r.status_code == 200
         uid = json.loads(r.text)['data']['user']['idstr']
     return uid
@@ -387,11 +391,8 @@ def get_user_info(uid: 'str|int') -> dict:
     params = {
         "uid": uid
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-        "Cookie": get_cookies_from_file()
-    }
-    r = requests.get(url, headers=headers, params=params)
+
+    r = requests.get(url, headers=_headers, params=params)
     assert r.status_code == 200
     return json.loads(r.text)
 
@@ -414,10 +415,7 @@ def get_user_follow(uid: 'str|int', flag: '0|1', num: int) -> list:
         "page": page,
         "uid": uid
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-        "Cookie": get_cookies_from_file()
-    }
+
     if flag:
         params.update({"relate": "fans"})
         maxnum = num_follower
@@ -431,10 +429,14 @@ def get_user_follow(uid: 'str|int', flag: '0|1', num: int) -> list:
 
     user_follow_list = []
     while len(user_follow_list) < num:
-        r = requests.get(url, headers=headers, params=params)
+        r = requests.get(url, headers=_headers, params=params)
         assert r.status_code == 200
-        user_follow_list += json.loads(r.text)['users']
+        u_list = json.loads(r.content)['users']
+        user_follow_list += u_list
+        if len(u_list) < 20:
+            return user_follow_list
         page += 1
+        params['page'] = page
     return user_follow_list[:num]
 
 
@@ -452,13 +454,10 @@ def get_user_weibo(uid: 'str|int', pages=3) -> list:
         "uid": uid,
         "page": page
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-        "Cookie": get_cookies_from_file()
-    }
 
     for page in range(1, pages+1):
-        r = requests.get(url, headers=headers, params=params)
+        params['page'] = page
+        r = requests.get(url, headers=_headers, params=params)
         assert r.status_code == 200
         user_weibo_list += json.loads(r.text)['data']['list']
 
@@ -476,10 +475,7 @@ def get_feeds(num=30) -> list:
         "list_id": "null",
         "count": num
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0",
-        "Cookie": get_cookies_from_file()
-    }
-    r = requests.get(url, headers=headers, params=params)
+
+    r = requests.get(url, headers=_headers, params=params)
     assert r.status_code == 200
     return json.loads(r.text)['statuses'][:num]
