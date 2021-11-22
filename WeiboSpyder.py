@@ -251,6 +251,10 @@ class WeiboSpyder:
         """
         return WBapi.get_hotband()
 
+    def refresh_cookies(self,cookies:str):
+        WBapi.set_cookies(cookies)
+        WBapi.set_headers()
+
     def hotWeibos(self, title: str = '24小时榜', num=100):
         """
         获取不同类别或时段的热门微博
