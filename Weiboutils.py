@@ -281,18 +281,18 @@ def parse_Weibo_tag(tag: BeautifulSoup) -> dict:
             image = [tag.attrs['src'].replace(
                 'orj360', 'large') for tag in image_tags]
         else:
-            if media_tag.find('video-player'):
-                video_str = media_tag.find('video-player').attrs[':options']
-                pat = re.compile(
-                    r'type:\'(?P<type>.*?)\'.*?src:\'(?P<src>.*?)\'')
-                video = pat.search(video_str.replace('\n', '')).groupdict()
-                video['src'] = 'https:'+video['src']
-            elif media_tag.find('video'):
+            if media_tag.find('video'):
                 video_dict = media_tag.find('video').attrs
                 video = {
                     'type': video_dict['x5-video-player-type'],
                     'src': video_dict['src']
                 }
+            elif media_tag.find('video-player'):
+                video_str = media_tag.find('video-player').attrs[':options']
+                pat = re.compile(
+                    r'type:\'(?P<type>.*?)\'.*?src:\'(?P<src>.*?)\'')
+                video = pat.search(video_str.replace('\n', '')).groupdict()
+                video['src'] = 'https:'+video['src']
 
     d = {
         'content': {
